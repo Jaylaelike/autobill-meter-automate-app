@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # Development Backend Monitor
+  monitor-dev:
+    build:
+      context: .
+      target: base
+    container_name: ge-meter-monitor-dev
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=file:./data/dev.db
+      - DEBUG=true
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - meter-network-dev
+    command: ["pnpm", "dev:monitor"]
+    ports:
+      - "3001:3001"
+
+  # Development Frontend Dashboard
+  dashboard-dev:
+    build:
+      context: .
+      target: base
+    container_name: ge-meter-dashboard-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=file:./data/dev.db
+    volumes:
+      - ./frontend/meter-reading-dashboard:/app/frontend/meter-reading-dashboard
+      - /app/frontend/meter-reading-dashboard/node_modules
+      - ./data:/app/data
+    networks:
+      - meter-network-dev
+    working_dir: /app/frontend/meter-reading-dashboard
+    command: ["pnpm", "dev"]
+    depends_on:
+      - monitor-dev
+
+  # Database for development
+  db-dev:
+    build:
+      context: .
+      target: base
+    container_name: ge-meter-db-dev
+    environment:
+      - DATABASE_URL=file:./data/dev.db
+    volumes:
+      - .:/app
+      - ./data:/app/data
+    networks:
+      - meter-network-dev
+    command: >
+      sh -c "
+        echo 'Setting up development database...'
+        pnpm db:generate
+        pnpm db:push
+        pnpm stations:seed
+        pnpm objects:import
+        echo 'Development database ready'
+        tail -f /dev/null
+      "
+
+networks:
+  meter-network-dev:
+    driver: bridge

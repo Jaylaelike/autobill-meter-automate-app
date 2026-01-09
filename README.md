@@ -1,223 +1,358 @@
-# Meter Reading Dashboard
+# GE Automate Meter Node
 
-A modern, real-time power monitoring dashboard built with Next.js, featuring comprehensive analytics for Active Power and MUX Power channels across multiple stations.
+A comprehensive power monitoring system that collects real-time data from multiple stations via WebSocket connections and provides a modern web dashboard for visualization and analytics.
 
 ## Screenshots
 
-### Dashboard Overview
-![Dashboard Overview](https://56fwnhyzti.ufs.sh/f/aK4w8mNL3AiP2YMwGIsEL4ocBZQyGd7xSpqsOt8wHiMNljnz)
+### Backend Screenshot
+![Backend Overview](https://56fwnhyzti.ufs.sh/f/aK4w8mNL3AiP82fV67CIASebfHy6vUqQVTDpmPjuM4on8xhi)
 
-### Station Detail Page
-![Station Detail](https://56fwnhyzti.ufs.sh/f/aK4w8mNL3AiP2YdPQmfEL4ocBZQyGd7xSpqsOt8wHiMNljnz)
 
-### Power Analytics
-![Power Analytics](https://56fwnhyzti.ufs.sh/f/aK4w8mNL3AiPQ8G1bMiIqWN4GPlHEcD7kVZyXApfCLtROe0n)
+## System Architecture
+
+The system consists of two main components:
+
+1. **Backend Data Collector** (Node.js) - Collects real-time data from stations
+2. **Frontend Dashboard** (Next.js) - Provides web interface for monitoring and analytics
 
 ## Features
 
-### Station Overview
-- Real-time station status monitoring (Active, Stale, Offline)
-- Station list with search and filtering capabilities
-- Quick navigation to station details
+### Backend Data Collector
+- **Real-time WebSocket Monitoring**: Connects to multiple stations simultaneously
+- **Dynamic Station Management**: Load station configurations from database
+- **Monitored Objects**: Tracks 12 power objects per station:
+  - Active Power 1-6 (Objects: 8684-8689)
+  - MUX Power Meters 1-6 (Objects: 18069-18070, 73909-73910, 75428-75429)
+- **Auto-reconnection**: Handles connection failures with exponential backoff
+- **Data Persistence**: Stores readings in SQLite database via Prisma ORM
+- **Logging**: Comprehensive logging system with rotation
 
-### Station Detail Page
-- **Station Header**: Display station name, IP address, scene, and status
-- **Data Controls**: Date range picker and time period selector for historical analysis
-- **Power Summary Cards**:
-  - Total Active Power (W and kW)
-  - Total MUX Power (W and kW)
-  - Active Sensors count
+### Frontend Dashboard
+- **Station Overview**: Real-time status monitoring for all stations
+- **Station Detail Pages**: Comprehensive analytics per station
+- **Power Summary Cards**: Total Active Power, MUX Power, and sensor counts
+- **Historical Analysis**: Configurable time periods (Day, Week, Month, Year)
+- **Power Breakdowns**: Individual channel analysis with MIN/MAX/AVG statistics
+- **Real-time Updates**: Auto-refreshing data with WebSocket integration
 
-### Historical Data Analysis
-- **Historical Bar Chart**: Aggregated power data visualization
-- Configurable time periods: Day, Week, Month, Year
-- Date range selection for custom analysis
+## Project Structure
 
-### Active Power Breakdown
-- Individual charts for 6 Active Power channels
-- Analytics per channel: MIN, MAX, AVG values
-- Historical data visualization based on selected time period
-- Color-coded cards for easy identification
-
-### MUX Power Breakdown
-- Individual charts for 6 MUX Power channels
-- Real-time power readings display
-- Values shown in both W and kW units
-
-## Tech Stack
-
-- **Framework**: Next.js 16 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS 4
-- **UI Components**: shadcn/ui with Radix UI primitives
-- **Charts**: ApexCharts (react-apexcharts)
-- **Database**: SQLite with Prisma ORM
-- **State Management**: TanStack Query (React Query)
-- **Date Handling**: date-fns
+```
+ge-automate-meter-node/
+├── src/                          # Backend source code
+│   ├── api/                      # API data fetchers
+│   ├── database/                 # Database services
+│   ├── utils/                    # Utility scripts
+│   └── websocket/                # WebSocket handlers
+├── frontend/                     # Frontend Next.js application
+│   └── meter-reading-dashboard/  # Dashboard application
+├── prisma/                       # Database schema and migrations
+├── logs/                         # Application logs
+├── scripts/                      # Utility scripts
+├── monitor.js                    # Main monitoring application
+├── chaigmai.js                   # Chiang Mai specific monitoring
+└── *.csv                         # Data import/export files
+```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - pnpm (recommended) or npm
+- SQLite (included)
 
 ### Installation
 
-1. Clone the repository:
+1. **Clone the repository:**
 ```bash
 git clone <repository-url>
-cd frontend/meter-reading-dashboard
+cd ge-automate-meter-node
 ```
 
-2. Install dependencies:
+2. **Install dependencies:**
 ```bash
 pnpm install
 ```
 
-3. Set up environment variables:
+3. **Set up environment variables:**
 ```bash
 cp .env.example .env
 ```
 
-4. Configure your database URL in `.env`:
-```env
-DATABASE_URL="file:./dev.db"
+4. **Configure database:**
+```bash
+pnpm db:generate
+pnpm db:migrate
 ```
 
-5. Run database migrations:
+5. **Seed initial data:**
 ```bash
-pnpm prisma migrate dev
+pnpm stations:seed
+pnpm objects:import
 ```
 
-6. Start the development server:
+### Running the System
+
+#### Start Backend Monitor
 ```bash
+# Start the main monitoring service
+pnpm start
+
+# Or run specific monitors
+node monitor.js
+node chaigmai.js
+```
+
+#### Start Frontend Dashboard
+```bash
+cd frontend/meter-reading-dashboard
+pnpm install
 pnpm dev
 ```
 
-7. Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Project Structure
-
-```
-frontend/meter-reading-dashboard/
-├── app/
-│   ├── api/
-│   │   └── station/
-│   │       └── [id]/
-│   │           ├── route.ts              # Station detail API
-│   │           ├── historical/route.ts   # Historical data API
-│   │           ├── realtime/route.ts     # Realtime data API
-│   │           ├── active-power-analytics/route.ts
-│   │           └── mux-analytics/route.ts
-│   ├── station/
-│   │   └── [id]/
-│   │       └── page.tsx                  # Station detail page
-│   ├── layout.tsx
-│   ├── page.tsx                          # Home page
-│   └── globals.css
-├── components/
-│   ├── ui/                               # shadcn/ui components
-│   ├── active-power-breakdown.tsx
-│   ├── mux-power-breakdown.tsx
-│   ├── power-summary-cards.tsx
-│   ├── historical-bar-chart.tsx
-│   ├── station-header.tsx
-│   ├── date-range-picker.tsx
-│   └── time-period-selector.tsx
-├── lib/
-│   ├── types/
-│   │   └── station.ts                    # TypeScript types
-│   └── utils.ts
-├── prisma/
-│   └── schema.prisma                     # Database schema
-└── __tests__/                            # Test files
-```
-
-## API Endpoints
-
-### Station APIs
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/station/[id]` | GET | Get station details |
-| `/api/station/[id]/historical` | GET | Get historical power data |
-| `/api/station/[id]/realtime` | GET | Get realtime power readings |
-| `/api/station/[id]/active-power-analytics` | GET | Get Active Power analytics |
-| `/api/station/[id]/mux-analytics` | GET | Get MUX Power analytics |
-
-### Query Parameters
-
-**Historical Data API:**
-- `from`: Start date (ISO string)
-- `to`: End date (ISO string)
-- `period`: Aggregation period (`day`, `week`, `month`, `year`)
-
-**Realtime Data API:**
-- `minutes`: Number of minutes of data to fetch (default: 30)
-
-## Database Schema
-
-### PowerReading Model
-```prisma
-model PowerReading {
-  id          String   @id @default(cuid())
-  stationId   String
-  timestamp   DateTime
-  
-  // Active Power readings (Watts)
-  activePower1  Float?
-  activePower2  Float?
-  activePower3  Float?
-  activePower4  Float?
-  activePower5  Float?
-  activePower6  Float?
-  
-  // MUX Power Meter readings (kWh)
-  muxPower1     Float?
-  muxPower2     Float?
-  muxPower3     Float?
-  muxPower4     Float?
-  muxPower5     Float?
-  muxPower6     Float?
-}
-```
-
-## Scripts
-
-```bash
-# Development
-pnpm dev          # Start development server
-
-# Build
-pnpm build        # Build for production
-pnpm start        # Start production server
-
-# Testing
-pnpm test         # Run tests
-pnpm test:watch   # Run tests in watch mode
-pnpm test:coverage # Run tests with coverage
-
-# Database
-pnpm prisma studio    # Open Prisma Studio
-pnpm prisma migrate   # Run migrations
-pnpm prisma generate  # Generate Prisma Client
-
-# Linting
-pnpm lint         # Run ESLint
-```
+The dashboard will be available at [http://localhost:3000](http://localhost:3000)
 
 ## Configuration
 
-### Time Period Definitions
-- **Day**: Last 24 hours (hourly aggregation)
-- **Week**: Last 7 days (daily aggregation)
-- **Month**: Last 30 days (daily aggregation)
-- **Year**: Last 365 days (monthly aggregation)
+### Station Configuration
+Stations are managed dynamically through the database. Use the station management utilities:
 
-### Auto-refresh Intervals
-- Station data: 30 seconds
-- Realtime data: 5 seconds
+```bash
+# List all stations
+pnpm stations:list
+
+# Seed default stations
+pnpm stations:seed
+
+# Analyze station data
+pnpm stations:analyze
+```
+
+### Monitored Objects
+The system monitors 12 objects per station:
+
+| Object ID | Type | Description |
+|-----------|------|-------------|
+| 8684-8689 | Active Power | Power channels 1-6 |
+| 18069-18070 | MUX Power | MUX meters 1-2 |
+| 73909-73910 | MUX Power | MUX meters 3-4 |
+| 75428-75429 | MUX Power | MUX meters 5-6 |
+
+### System Settings
+Edit `monitor.js` configuration:
+
+```javascript
+const config = {
+  updateRate: 3000,           // Data collection interval (ms)
+  connectionTimeout: 10000,   // WebSocket timeout (ms)
+  reconnectInterval: 5000,    // Reconnection delay (ms)
+  maxReconnectAttempts: 5,    // Max reconnection attempts
+  cycleDelay: 60000,         // Delay between station cycles (ms)
+};
+```
+
+## Database Schema
+
+### Core Models
+
+**Station**
+- id, name, ipAddress, scene
+- Relationship to PowerReading and StationMonitoredObject
+
+**PowerReading**
+- Timestamp-based power measurements
+- 6 Active Power channels (activePower1-6)
+- 6 MUX Power channels (muxPower1-6)
+
+**StationMonitoredObject**
+- Maps object types to specific IDs per station
+- Enables dynamic object monitoring
+
+## Scripts Reference
+
+### Database Operations
+```bash
+pnpm db:generate    # Generate Prisma client
+pnpm db:migrate     # Run database migrations
+pnpm db:push        # Push schema changes
+pnpm db:studio      # Open Prisma Studio
+pnpm db:reset       # Reset database
+```
+
+### Station Management
+```bash
+pnpm stations:list     # List all stations
+pnpm stations:seed     # Seed default stations
+pnpm stations:analyze  # Analyze station data
+pnpm stations:check    # Check station status
+```
+
+### Object Management
+```bash
+pnpm objects:import   # Import monitored objects
+pnpm objects:verify   # Verify object mappings
+```
+
+### Testing
+```bash
+pnpm test:objects      # Test object monitoring
+pnpm test:chiang-mai   # Test Chiang Mai station
+pnpm test:monitor      # Test monitoring system
+pnpm test:ranong       # Test Ranong data mapping
+```
+
+### Data Management
+```bash
+pnpm clear:readings   # Clear power readings (use --force)
+```
+
+## Monitoring & Logging
+
+### Log Files
+- `logs/monitor.log` - Main monitoring log
+- `logs/chiangmai_*.log` - Chiang Mai specific logs
+- `data.log` - Data collection log
+
+### Health Monitoring
+The system provides built-in health monitoring:
+- Connection status per station
+- Data collection rates
+- Error tracking and recovery
+- Performance metrics
+
+## API Endpoints
+
+The frontend provides REST APIs for data access:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/station/[id]` | GET | Station details |
+| `/api/station/[id]/historical` | GET | Historical power data |
+| `/api/station/[id]/realtime` | GET | Real-time readings |
+| `/api/station/[id]/active-power-analytics` | GET | Active Power analytics |
+| `/api/station/[id]/mux-analytics` | GET | MUX Power analytics |
+
+## Deployment
+
+### Docker Deployment (Recommended)
+
+The project includes Docker support for easy deployment and development.
+
+#### Production Deployment
+
+1. **Build and run with Docker Compose:**
+```bash
+# Build and start all services
+pnpm docker:up
+
+# View logs
+pnpm docker:logs
+
+# Stop services
+pnpm docker:down
+```
+
+2. **Manual Docker build:**
+```bash
+# Build the image
+pnpm docker:build
+
+# Run the container
+pnpm docker:run
+```
+
+#### Development with Docker
+
+```bash
+# Start development environment
+pnpm docker:dev
+
+# Stop development environment
+pnpm docker:dev:down
+```
+
+The development setup includes:
+- Hot reload for both backend and frontend
+- Volume mounts for live code changes
+- Separate development database
+- Debug logging enabled
+
+#### Docker Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `monitor` | - | Backend data collector |
+| `dashboard` | 3000 | Frontend web interface |
+| `db-init` | - | Database initialization (runs once) |
+
+#### Docker Environment Variables
+
+Create a `.env` file for Docker deployment:
+```env
+NODE_ENV=production
+DATABASE_URL=file:./data/production.db
+DEBUG=false
+```
+
+### Traditional Deployment
+
+#### Production Setup
+
+1. **Environment Configuration:**
+```bash
+NODE_ENV=production
+DATABASE_URL="file:./production.db"
+```
+
+2. **Build Frontend:**
+```bash
+cd frontend/meter-reading-dashboard
+pnpm build
+```
+
+3. **Start Services:**
+```bash
+# Backend monitor
+pnpm start
+
+# Frontend (production)
+cd frontend/meter-reading-dashboard
+pnpm start
+```
+
+### Process Management
+Consider using PM2 for production process management:
+
+```bash
+pm2 start monitor.js --name "power-monitor"
+pm2 start frontend/meter-reading-dashboard/package.json --name "dashboard"
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **WebSocket Connection Failures**
+   - Check station IP addresses and network connectivity
+   - Verify firewall settings
+   - Review connection logs in `logs/monitor.log`
+
+2. **Database Issues**
+   - Run `pnpm db:generate` after schema changes
+   - Check database file permissions
+   - Use `pnpm db:studio` for data inspection
+
+3. **Missing Data**
+   - Verify monitored object IDs are correct
+   - Check station-specific object mappings
+   - Review data collection logs
+
+### Debug Mode
+Enable debug logging by setting environment variable:
+```bash
+DEBUG=true node monitor.js
+```
 
 ## Contributing
 
@@ -229,4 +364,11 @@ pnpm lint         # Run ESLint
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the ISC License.
+
+## Support
+
+For issues and questions:
+1. Check the troubleshooting section
+2. Review log files in the `logs/` directory
+3. Open an issue on the repository

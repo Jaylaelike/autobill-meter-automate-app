@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # Backend Monitor Service
+  monitor:
+    build:
+      context: .
+      target: backend
+    container_name: ge-meter-monitor
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:./data/production.db
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - meter-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Frontend Dashboard Service
+  dashboard:
+    build:
+      context: .
+      target: frontend
+    container_name: ge-meter-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:./data/production.db
+    volumes:
+      - ./data:/app/data
+    networks:
+      - meter-network
+    depends_on:
+      - monitor
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Database initialization service (runs once)
+  db-init:
+    build:
+      context: .
+      target: base
+    container_name: ge-meter-db-init
+    environment:
+      - DATABASE_URL=file:./data/production.db
+    volumes:
+      - ./data:/app/data
+    networks:
+      - meter-network
+    command: >
+      sh -c "
+        echo 'Initializing database...'
+        pnpm db:push
+        pnpm stations:seed
+        pnpm objects:import
+        echo 'Database initialization complete'
+      "
+    restart: "no"
+
+networks:
+  meter-network:
+    driver: bridge
+
+volumes:
+  meter-data:
+    driver: local

@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "nodemon monitor.js simultaneous > logs/monitor.log",
+    "dev:monitor": "nodemon monitor.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -22,7 +23,14 @@
     "test:chiang-mai": "node test-chiang-mai-objects.js",
     "test:monitor": "node test-monitor-dynamic-objects.js",
     "test:ranong": "node test-ranong-data-mapping.js",
-    "clear:readings": "node clear-power-readings.js --force"
+    "clear:readings": "node clear-power-readings.js --force",
+    "docker:build": "docker build -t ge-meter-node .",
+    "docker:run": "docker run -p 3000:3000 -p 3001:3001 ge-meter-node",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up -d",
+    "docker:dev:down": "docker-compose -f docker-compose.dev.yml down"
   },
   "keywords": [],
   "author": "",

@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+frontend/meter-reading-dashboard/node_modules/
+
+# Environment files
+.env
+.env.*
+
+# Database files
+*.db
+*.db-journal
+data/
+
+# Log files
+*.log
+logs/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+frontend/meter-reading-dashboard/.next/
+frontend/meter-reading-dashboard/out/
+
+# Cache
+.cache/
+*.tsbuildinfo
+.eslintcache
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Documentation
+*.md
+docs/
+
+# Test files
+__tests__/
+*.test.js
+*.test.ts
+
+# Misc
+.DS_Store
+*.pem
+*.key
+coverage/
+.nyc_output/
