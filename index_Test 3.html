@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket Example - Chiang Mai</title>
+</head>
+
+<body>
+    <h1>Golden Eagle Omron Meter - เชียงใหม่</h1>
+    <button id="connectBtn">Connect</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
+    <div id="Error:" style="color: red;"></div>
+
+
+    <div id="status_ChiangMai">เชียงใหม่</div>
+    <div id="group_ChiangMai" style="display: block;">
+        <div>Active Power 1: <span id="chiangmai-8684"></span></div>
+        <div>Active Power 2: <span id="chiangmai-8685"></span></div>
+        <div>Active Power 3: <span id="chiangmai-8686"></span></div>
+        <div>Active Power 4: <span id="chiangmai-8687"></span></div>
+        <div>Active Power 5: <span id="chiangmai-8688"></span></div>
+        <div>Active Power 6: <span id="chiangmai-8689"></span></div>
+        <div>MUX#1 TV5 Power Meter totally: <span id="chiangmai-18069"></span></div>
+        <div>MUX#2 MCOT Power Meter totally: <span id="chiangmai-18070"></span></div>
+        <div>MUX#3 PRD Power Meter totally: <span id="chiangmai-73909"></span></div>
+        <div>MUX#4 TPBS Power Meter totally: <span id="chiangmai-73910"></span></div>
+        <div>MUX#5 TPBS Power Meter totally: <span id="chiangmai-224272"></span></div>
+        <div>MUX#6 TPBS Power Meter totally: <span id="chiangmai-75429"></span></div>
+    </div>
+
+    <script>
+        let ws = null;
+        const IP = "ws://10.3.2.5/ws"; // เชียงใหม่
+
+        window.USID = null; // Global variable to store USID
+
+        const messagesDiv = document.getElementById('messages');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+
+        function connectWS() {
+            if (ws && ws.readyState === WebSocket.OPEN) return;
+            ws = new WebSocket(IP);
+
+            ws.onopen = function () {
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+
+                console.log('เชื่อมต่อกับ WebSocket สำเร็จ');
+
+                const DATA = {
+                    id: 0,
+                    method: "comet.signIn",
+                    params: [
+                        { "$class": "com.wcs.comet.shared.CoreGTLoginContext" },
+                        "Admin",
+                        "admin",
+                        {
+                            "$className": "com.wcs.comet.shared.ClientInfo",
+                            userLevel: -1,
+                            ConnectionTimeStamp: 0,
+                            DataTimeout: 0,
+                            IpAddress: null,
+                            Protocol: null,
+                            ProtocolVersion: 0,
+                            SID: -1,
+                            USID: null,
+                            UserAgent: "GWT Comet Client",
+                            UserAgentVersion: 2,
+                            UserLevel: -1,
+                            UserName: "WebApp Client",
+                            Admin: false,
+                            Guest: false,
+                            Logged: false
+                        },
+                        30,
+                        30
+                    ]
+                };
+
+                const DATA1 = {
+                    id: 1,
+                    method: "comet.subscribeNotification",
+                    params: ["", "ScriptEngine", { "displayName": "Admin" }]
+                };
+
+                const DATA2 = {
+                    id: 2,
+                    method: "ScriptEngine.setUpdateRate",
+                    params: ["", 3000]
+                };
+
+                const DATA3 = {
+                    id: 3,
+                    method: "ScriptEngine.loadScriptInfo",
+                    params: []
+                };
+
+                const DATA4 = {
+                    id: 4,
+                    method: "ScriptEngine.loadDashboards",
+                    params: []
+                };
+
+                const DATA5 = {
+                    id: 5,
+                    method: "ScriptEngine.loadScriptInfo",
+                    params: []
+                };
+
+                const DATA6 = {
+                    id: 6,
+                    method: "ScriptEngine.loadScene",
+                    params: ["d0cf3a77-e9dd-4419-bec0-b54ecad3e541"]
+                };
+
+                const DATA7 = {
+                    id: 7,
+                    method: "ScriptEngine.registerActiveObjects",
+                    params: [
+                        "",
+                        [8684, 8685, 8687, 8688, 18069, 18070, 73910, 224272, -1]
+                    ]
+                };
+
+                async function setUpSession() {
+                    try {
+                        console.log("ส่งข้อมูลชุด ID 0");
+                        const result = await sendData(DATA);
+                        console.log("ดึงข้อมูลสำเร็จ:", result.data);
+
+                        const result1 = await new Promise((resolve, reject) => {
+                            ws.onmessage = (event) => {
+                                handleWSMessage(event)
+                                    .then(resolve)
+                                    .catch(reject);
+                            };
+                        });
+
+                        console.log("ส่งข้อมูลชุด ID 1");
+                        console.log(window.USID);
+                        DATA1.params[0] = window.USID;
+
+                        const result2 = await sendData(DATA1);
+                        console.log("ดึงข้อมูลสำเร็จ:", result2.data);
+
+                        let arguments = 1;
+                        const result3 = await new Promise((resolve, reject) => {
+                            ws.onmessage = (event) => {
+                                handleWSMessage1(event, arguments)
+                                    .then(resolve)
+                                    .catch(reject);
+                            };
+                        });
+
+                        console.log("ส่งข้อมูลชุด ID 2");
+                        console.log(window.USID);
+                        DATA2.params[0] = window.USID;
+
+                        const result4 = await sendData(DATA2);
+                        console.log("ดึงข้อมูลสำเร็จ:", result4.data);
+
+                        let arguments2 = 2;
+                        const result5 = await new Promise((resolve, reject) => {
+                            ws.onmessage = (event) => {
+                                handleWSMessage1(event, arguments2)
+                                    .then(resolve)
+                                    .catch(reject);
+                            };
+                        });
+
+                        console.log("ส่งข้อมูลชุด ID 3");
+                        const result6 = await sendData(DATA3);
+                        console.log("ดึงข้อมูลสำเร็จ:", result6.data);
+
+                        let arguments3 = 3;
+                        const result7 = await new Promise((resolve, reject) => {
+                            ws.onmessage = (event) => {
+                                handleWSMessage2(event, arguments3)
+                                    .then(resolve)
+                                    .catch(reject);
+                            };
+                        });
+
+                        console.log("ส่งข้อมูลชุด ID 4");
+                        const result8 = await sendData(DATA4);
+                        console.log("ดึงข้อมูลสำเร็จ:", result8.data);
+
+                        let arguments4 = 4;
+                        const result9 = await new Promise((resolve, reject) => {
+                            ws.onmessage = (event) => {
+                                handleWSMessage2(event, arguments4)
+                                    .then(resolve)
+                                    .catch(reject);
+                            };
+                        });
+
+                        console.log("ส่งข้อมูลชุด ID 5");
+                        const result10 = await sendData(DATA5);
+                        console.log("ดึงข้อมูลสำเร็จ:", result10.data);
+
+                        let arguments5 = 5;
+                        const result11 = await new Promise((resolve, reject) => {
+                            ws.onmessage = (event) => {
+                                handleWSMessage2(event, arguments5)
+                                    .then(resolve)
+                                    .catch(reject);
+                            };
+                        });
+
+                        console.log("ส่งข้อมูลชุด ID 6");
+                        const result12 = await sendData(DATA6);
+                        console.log("ดึงข้อมูลสำเร็จ:", result12.data);
+
+                        let arguments6 = 6;
+                        const result13 = await new Promise((resolve, reject) => {
+                            ws.onmessage = (event) => {
+                                handleWSMessage2(event, arguments6)
+                                    .then(resolve)
+                                    .catch(reject);
+                            };
+                        });
+
+                        console.log("ส่งข้อมูลชุด ID 7");
+                        console.log(window.USID);
+                        DATA7.params[0] = window.USID;
+
+                        const result14 = await sendData(DATA7);
+                        console.log("ดึงข้อมูลสำเร็จ:", result14.data);
+
+                        let arguments7 = 7;
+                        const result15 = await new Promise((resolve, reject) => {
+                            ws.onmessage = (event) => {
+                                handleWSMessage1(event, arguments7)
+                                    .then(resolve)
+                                    .catch(reject);
+                            };
+                        });
+
+                        const resultALL = await new Promise((resolve, reject) => {
+                            console.log("Listening for notifications");
+                            ws.onmessage = (event) => {
+                                handleWSMessageALL(event)
+                                    .then(resolve)
+                                    .catch(reject);
+                            };
+                        });
+
+                    } catch (error) {
+                        console.error("เกิดข้อผิดพลาด:", error.message);
+                    } finally {
+                        console.log("กระบวนการสิ้นสุดลงแล้ว");
+                    }
+                }
+
+                function handleWSMessageALL(event) {
+                    return new Promise((resolve, reject) => {
+                        const msg = JSON.parse(event.data);
+                        if (msg.notification && msg.notification.provider === "ScriptEngine") {
+                            const syncData = msg.notification.value?.sync;
+                            if (syncData) {
+                                const ids = [
+                                    8684, 8685, 8687, 8688, 18069, 18070, 73910, 224272 , -1
+                                ];
+
+                                ids.forEach(id => {
+                                    if (syncData.hasOwnProperty(id.toString())) {
+                                        const el = document.getElementById(`chiangmai-${id}`);
+                                        if (el) {
+                                            el.textContent = syncData[id.toString()];
+                                        }
+                                    }
+                                });
+                            } else {
+                                console.warn("sync data not found in notification");
+                            }
+
+                            resolve({ data: "notification successfully" });
+                        } else {
+                            console.error('Invalid notification');
+                            reject(new Error("Invalid notification"));
+                        }
+                    });
+                }
+
+                function handleWSMessage(event) {
+                    return new Promise((resolve, reject) => {
+                        const msg = JSON.parse(event.data);
+                        if (msg.id === 0 && msg.result && msg.result.USID) {
+                            window.USID = msg.result.USID;
+                            console.log(window.USID);
+                            resolve({ data: "Data USID successfully" });
+                        } else {
+                            console.error('Invalid USID');
+                            reject(new Error("Invalid USID"));
+                        }
+                    });
+                }
+
+                function handleWSMessage1(event, arguments) {
+                    return new Promise((resolve, reject) => {
+                        const msg = JSON.parse(event.data);
+                        if (msg.id === arguments && msg.result === true) {
+                            console.log(msg);
+                            resolve({ data: "result true successfully" });
+                        } else {
+                            console.error('Invalid ID, result fault');
+                            reject(new Error("Invalid ID result fault"));
+                        }
+                    });
+                }
+
+                function handleWSMessage2(event, arguments) {
+                    return new Promise((resolve, reject) => {
+                        const msg = JSON.parse(event.data);
+                        if (msg.id === arguments && msg.cached === true) {
+                            console.log(msg);
+                            resolve({ data: "cached true successfully" });
+                        } else {
+                            console.error('Invalid ID, result fault');
+                            reject(new Error("Invalid ID result fault"));
+                        }
+                    });
+                }
+
+                function sendData(data_agent) {
+                    return new Promise((resolve, reject) => {
+                        setTimeout(() => {
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify(data_agent) + "\n");
+                                resolve({ data: "Data sent successfully" });
+                                console.log("Data sent successfully:", data_agent);
+                            } else {
+                                reject(new Error("WebSocket is not open"));
+                                console.error("WebSocket is not open");
+                            }
+                        }, 1000);
+                    });
+                }
+
+                setUpSession();
+            };
+
+            ws.onerror = function (error) {
+                document.getElementById('Error:').innerText = `Error: ${error.message}`;
+            };
+
+            ws.onclose = function () {
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            };
+        }
+
+        function disconnectWS() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+        }
+
+        connectBtn.onclick = function () {
+            connectWS();
+        };
+
+        disconnectBtn.onclick = disconnectWS;
+    </script>
+
+</body>
+
+</html>
