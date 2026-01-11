@@ -2,8 +2,32 @@ const WebSocket = require("ws");
 const DatabaseService = require("./src/database/DatabaseService");
 const ApiDataFetcher = require("./src/api/ApiDataFetcher");
 const { spawn } = require("child_process");
+const fs = require("fs");
+const path = require("path");
 
 // ==================== Configuration ====================
+// Settings file path (can be updated from frontend)
+const SETTINGS_FILE = path.join(__dirname, "monitor-settings.json");
+
+// Load settings from file if exists
+function loadSettingsFromFile() {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const data = fs.readFileSync(SETTINGS_FILE, "utf-8");
+      const settings = JSON.parse(data);
+      console.log("📋 Loaded settings from file:", SETTINGS_FILE);
+      console.log("   Settings:", JSON.stringify(settings, null, 2));
+      return settings;
+    } else {
+      console.log("⚠️  Settings file not found:", SETTINGS_FILE);
+      console.log("   Using default settings");
+    }
+  } catch (error) {
+    console.warn("⚠️  Could not load settings file:", error.message);
+  }
+  return null;
+}
+
 // Default/fallback station configurations (used if database is unavailable)
 const defaultStations = [
   {
@@ -23,6 +47,9 @@ const defaultStations = [
   },
 ];
 
+// Load custom settings from file
+const customSettings = loadSettingsFromFile();
+
 const config = {
   stations: [], // Will be loaded dynamically from database
   defaultStations: defaultStations, // Fallback stations
@@ -40,12 +67,23 @@ const config = {
     75428,
     75429, // MUX#5-6 Power Meter
   ],
-  updateRate: 3000, // 3 sec
-  connectionTimeout: 10000, // 10 seconds
-  reconnectInterval: 5000, // 5 seconds
-  maxReconnectAttempts: 5,
-  cycleDelay: 60000, // 30 seconds per station
+  updateRate: customSettings?.updateRate || 3000, // 3 sec
+  connectionTimeout: customSettings?.connectionTimeout || 10000, // 10 seconds
+  reconnectInterval: customSettings?.reconnectInterval || 5000, // 5 seconds
+  maxReconnectAttempts: customSettings?.maxReconnectAttempts || 10, // Increased for better resilience
+  cycleDelay: 60000, // 60 seconds per station
+  dbSaveInterval: customSettings?.dbSaveInterval || 30000, // 30 seconds - interval for saving to database
+  networkCheckInterval: 15000, // 15 seconds - interval for network health check
 };
+
+// Log the final configuration
+console.log("\n⚙️  Monitor Configuration:");
+console.log(`   Update Rate: ${config.updateRate}ms (${config.updateRate / 1000}s)`);
+console.log(`   DB Save Interval: ${config.dbSaveInterval}ms (${config.dbSaveInterval / 1000}s)`);
+console.log(`   Connection Timeout: ${config.connectionTimeout}ms (${config.connectionTimeout / 1000}s)`);
+console.log(`   Reconnect Interval: ${config.reconnectInterval}ms (${config.reconnectInterval / 1000}s)`);
+console.log(`   Max Reconnect Attempts: ${config.maxReconnectAttempts}`);
+console.log("");
 
 // ==================== Station Monitor Class ====================
 class StationMonitor {
@@ -61,9 +99,11 @@ class StationMonitor {
     this.stationRecord = null; // Database station record
     this.pendingData = []; // Buffer for batch database operations
     this.lastDbSave = null;
-    this.dbSaveInterval = 10000; // Save to DB every 10 seconds
+    this.dbSaveInterval = config.dbSaveInterval || 30000; // Save to DB every 30 seconds
     this.monitoredObjects = []; // Dynamic monitored objects for this station
     this.objectLabels = {}; // Labels for display
+    this.networkFailureCount = 0; // Track consecutive network failures
+    this.lastNetworkCheck = null; // Last network health check time
   }
 
   // Connect to WebSocket
@@ -447,10 +487,33 @@ class StationMonitor {
         return;
       }
 
+      // Calculate total power values
+      const activePowerKeys = ['8684', '8685', '8686', '8687', '8688', '8689'];
+      const muxPowerKeys = ['18069', '18070', '73909', '73910', '75428', '75429'];
+      
+      let totalActivePower = 0;
+      let totalMuxPower = 0;
+      
+      activePowerKeys.forEach(key => {
+        if (this.dataBuffer[key] !== undefined && this.dataBuffer[key] !== null) {
+          totalActivePower += parseFloat(this.dataBuffer[key]) || 0;
+        }
+      });
+      
+      muxPowerKeys.forEach(key => {
+        if (this.dataBuffer[key] !== undefined && this.dataBuffer[key] !== null) {
+          totalMuxPower += parseFloat(this.dataBuffer[key]) || 0;
+        }
+      });
+
       const readingData = {
         stationId: this.stationRecord.id,
         timestamp: this.lastUpdate,
-        powerData: { ...this.dataBuffer },
+        powerData: { 
+          ...this.dataBuffer,
+          totalActivePower,
+          totalMuxPower
+        },
       };
 
       // Validate data before saving
@@ -474,17 +537,18 @@ class StationMonitor {
 
       await this.databaseService.createPowerReading(readingData);
       this.lastDbSave = now;
+      this.networkFailureCount = 0; // Reset failure count on success
 
-      // Optional: Log successful saves less frequently to reduce noise
-      if (Math.random() < 0.1) {
-        // Log ~10% of saves
-        console.log(`[${this.config.name}] 💾 Data saved to database`);
-      }
+      // Log with total power info and interval
+      const timeSinceLastSave = this.lastDbSave ? Math.round((now - this.lastDbSave) / 1000) : 0;
+      console.log(`[${this.config.name}] 💾 Data saved (interval: ${this.dbSaveInterval / 1000}s) - Total Active: ${totalActivePower.toFixed(2)}W, Total MUX: ${totalMuxPower.toFixed(2)}kWh`);
     } catch (error) {
       console.error(
         `[${this.config.name}] ❌ Failed to save to database:`,
         error.message
       );
+      
+      this.networkFailureCount++;
 
       // If it's a connection error, try to reinitialize the station
       if (
@@ -526,26 +590,91 @@ class StationMonitor {
     };
   }
 
-  // Handle reconnection
+  // Handle reconnection with optimized network checking
   handleReconnect() {
     if (this.reconnectAttempts < config.maxReconnectAttempts) {
       this.reconnectAttempts++;
+      this.networkFailureCount++;
+      
+      // Calculate backoff delay based on failure count (exponential backoff with max 60 seconds)
+      const backoffDelay = Math.min(
+        config.reconnectInterval * Math.pow(1.5, this.reconnectAttempts - 1),
+        60000
+      );
+      
       console.log(
-        `[${this.config.name}] 🔄 กำลังลองเชื่อมต่อใหม่... (ครั้งที่ ${this.reconnectAttempts})`
+        `[${this.config.name}] 🔄 กำลังลองเชื่อมต่อใหม่... (ครั้งที่ ${this.reconnectAttempts}/${config.maxReconnectAttempts}, รอ ${Math.round(backoffDelay/1000)}s)`
       );
 
-      setTimeout(() => {
-        this.connect()
-          .then(() => this.initializeSession())
-          .catch((error) => {
-            console.error(
-              `[${this.config.name}] ✗ Reconnect failed:`,
-              error.message
-            );
-          });
-      }, config.reconnectInterval);
+      setTimeout(async () => {
+        try {
+          // Check network connectivity before attempting reconnect
+          const isNetworkAvailable = await this.checkNetworkConnectivity();
+          
+          if (!isNetworkAvailable) {
+            console.log(`[${this.config.name}] ⚠️  Network unavailable, waiting...`);
+            this.handleReconnect(); // Retry with incremented counter
+            return;
+          }
+          
+          await this.connect();
+          await this.initializeSession();
+          console.log(`[${this.config.name}] ✓ Reconnected successfully`);
+          this.networkFailureCount = 0; // Reset on success
+        } catch (error) {
+          console.error(
+            `[${this.config.name}] ✗ Reconnect failed:`,
+            error.message
+          );
+          this.handleReconnect(); // Continue trying
+        }
+      }, backoffDelay);
     } else {
-      console.error(`[${this.config.name}] ✗ เกินจำนวนครั้งการลองเชื่อมต่อ`);
+      console.error(`[${this.config.name}] ✗ เกินจำนวนครั้งการลองเชื่อมต่อ - จะลองใหม่ใน 2 นาที`);
+      
+      // Reset and try again after a longer delay
+      setTimeout(() => {
+        console.log(`[${this.config.name}] 🔄 Resetting reconnection attempts...`);
+        this.reconnectAttempts = 0;
+        this.handleReconnect();
+      }, 120000); // Wait 2 minutes before resetting
+    }
+  }
+
+  // Check network connectivity
+  async checkNetworkConnectivity() {
+    try {
+      // Extract host from WebSocket URL
+      const wsUrl = this.config.ip;
+      const host = wsUrl.replace('ws://', '').replace('/ws', '').split(':')[0];
+      
+      // Simple connectivity check using DNS/ping simulation
+      return new Promise((resolve) => {
+        const net = require('net');
+        const socket = new net.Socket();
+        
+        socket.setTimeout(5000);
+        
+        socket.on('connect', () => {
+          socket.destroy();
+          resolve(true);
+        });
+        
+        socket.on('timeout', () => {
+          socket.destroy();
+          resolve(false);
+        });
+        
+        socket.on('error', () => {
+          socket.destroy();
+          resolve(false);
+        });
+        
+        // Try to connect to port 80 (HTTP) as a basic connectivity check
+        socket.connect(80, host);
+      });
+    } catch (error) {
+      return false;
     }
   }
 

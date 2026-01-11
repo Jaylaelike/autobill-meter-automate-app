@@ -7,6 +7,426 @@ A comprehensive power monitoring system that collects real-time data from multip
 ### Backend Screenshot
 ![Backend Overview](https://56fwnhyzti.ufs.sh/f/aK4w8mNL3AiP82fV67CIASebfHy6vUqQVTDpmPjuM4on8xhi)
 
+---
+
+## System Architecture Diagrams
+
+### High-Level System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        GE AUTOMATE METER NODE SYSTEM                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+    │   Station 1  │     │   Station 2  │     │   Station N  │
+    │    (แพร่)     │     │    (น่าน)     │     │   (ชุมพร)    │
+    │  WebSocket   │     │  WebSocket   │     │  WebSocket   │
+    └──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+           │                    │                    │
+           │    Real-time Power Data (3s interval)  │
+           └────────────────────┼────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         BACKEND (Node.js)                                   │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                      monitor.js                                      │   │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐  │   │
+│  │  │ StationMonitor  │  │ MonitorController│  │  ApiDataFetcher    │  │   │
+│  │  │  - WebSocket    │  │  - Orchestration │  │  - HTTP API calls  │  │   │
+│  │  │  - Data Buffer  │  │  - Station Mgmt  │  │  - Chiang Mai      │  │   │
+│  │  │  - Reconnection │  │  - DB Init       │  │  - Data Transform  │  │   │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────────┘  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                        │
+│                                    ▼ (30s interval)                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                    DatabaseService.js                                │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────────┐  │   │
+│  │  │ Prisma ORM  │  │ Validation  │  │ Total Power Calculation     │  │   │
+│  │  │             │  │             │  │ - totalActivePower          │  │   │
+│  │  │             │  │             │  │ - totalMuxPower             │  │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────────────────────┘  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                        │
+└────────────────────────────────────┼────────────────────────────────────────┘
+                                     │
+                                     ▼
+                    ┌────────────────────────────────┐
+                    │        SQLite Database         │
+                    │  ┌──────────────────────────┐  │
+                    │  │ Station                  │  │
+                    │  │ PowerReading             │  │
+                    │  │ StationMonitoredObject   │  │
+                    │  │ User                     │  │
+                    │  └──────────────────────────┘  │
+                    └────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      FRONTEND (Next.js Dashboard)                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                         API Routes                                   │   │
+│  │  /api/station/[id]  │  /api/station/[id]/historical  │  /api/settings│   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                         Components                                   │   │
+│  │  stats-cards │ power-readings-table │ historical-bar-chart │ sidebar│   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                           Pages                                      │   │
+│  │     Dashboard (/)  │  Station Detail (/station/[id])  │  Settings   │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+                    ┌────────────────────────────────┐
+                    │         Web Browser            │
+                    │    http://localhost:3000       │
+                    └────────────────────────────────┘
+```
+
+### Data Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           DATA FLOW DIAGRAM                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  POWER STATIONS                    BACKEND                      FRONTEND
+  ══════════════                    ═══════                      ════════
+
+  ┌─────────────┐
+  │  Station    │
+  │  Hardware   │
+  │  (PLC/RTU)  │
+  └──────┬──────┘
+         │
+         │ WebSocket Connection
+         │ ws://10.x.x.x/ws
+         ▼
+  ┌─────────────┐     ┌─────────────────────────────────────────────────┐
+  │  WebSocket  │────▶│  1. CONNECT & AUTHENTICATE                      │
+  │  Server     │     │     - comet.signIn (Admin/admin)                │
+  │             │     │     - Get USID session token                    │
+  └─────────────┘     │     - Subscribe to ScriptEngine notifications   │
+                      └─────────────────────────────────────────────────┘
+                                          │
+                                          ▼
+                      ┌─────────────────────────────────────────────────┐
+                      │  2. REGISTER MONITORED OBJECTS                  │
+                      │     Active Power: 8684-8689 (6 channels)        │
+                      │     MUX Power: 18069-18070, 73909-73910,        │
+                      │                75428-75429 (6 channels)         │
+                      └─────────────────────────────────────────────────┘
+                                          │
+                                          ▼
+                      ┌─────────────────────────────────────────────────┐
+                      │  3. RECEIVE REAL-TIME DATA (every 3s)           │
+                      │     {                                           │
+                      │       "8684": 1234.56,  // Active Power 1       │
+                      │       "8685": 2345.67,  // Active Power 2       │
+                      │       ...                                       │
+                      │       "18069": 100.5,   // MUX Power 1          │
+                      │       ...                                       │
+                      │     }                                           │
+                      └─────────────────────────────────────────────────┘
+                                          │
+                                          ▼
+                      ┌─────────────────────────────────────────────────┐
+                      │  4. BUFFER & CALCULATE TOTALS                   │
+                      │     totalActivePower = Σ(activePower1-6)        │
+                      │     totalMuxPower = Σ(muxPower1-6)              │
+                      └─────────────────────────────────────────────────┘
+                                          │
+                                          ▼ (every 30s)
+                      ┌─────────────────────────────────────────────────┐
+                      │  5. SAVE TO DATABASE                            │
+                      │     PowerReading {                              │
+                      │       stationId, timestamp,                     │
+                      │       activePower1-6, muxPower1-6,              │
+                      │       totalActivePower, totalMuxPower           │
+                      │     }                                           │
+                      └─────────────────────────────────────────────────┘
+                                          │
+                                          │
+                      ┌───────────────────┴───────────────────┐
+                      │           SQLite Database             │
+                      └───────────────────┬───────────────────┘
+                                          │
+                                          ▼
+                      ┌─────────────────────────────────────────────────┐
+                      │  6. API ROUTES QUERY DATABASE                   │
+                      │     GET /api/station/[id]                       │
+                      │     GET /api/station/[id]/historical            │
+                      │     GET /api/station/[id]/realtime              │
+                      └─────────────────────────────────────────────────┘
+                                          │
+                                          ▼
+                                                        ┌─────────────────┐
+                                                        │  7. DASHBOARD   │
+                                                        │  - Stats Cards  │
+                                                        │  - Power Table  │
+                                                        │  - Bar Charts   │
+                                                        │  - Analytics    │
+                                                        └─────────────────┘
+```
+
+
+### Component Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       COMPONENT ARCHITECTURE                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+BACKEND COMPONENTS
+══════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              monitor.js                                     │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │                        MonitorController                               │ │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐   │ │
+│  │  │ initialize()    │  │ startSimultaneous│  │ loadStationsFromDB │   │ │
+│  │  │ - DB connect    │  │ - All stations   │  │ - Dynamic config   │   │ │
+│  │  │ - Load stations │  │ - Parallel run   │  │ - Fallback support │   │ │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────────┘   │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                        │
+│                    ┌───────────────┴───────────────┐                       │
+│                    ▼                               ▼                        │
+│  ┌─────────────────────────────┐  ┌─────────────────────────────────────┐  │
+│  │      StationMonitor         │  │         ApiDataFetcher              │  │
+│  │  ┌───────────────────────┐  │  │  ┌───────────────────────────────┐  │  │
+│  │  │ connect()             │  │  │  │ connect()                     │  │  │
+│  │  │ initializeSession()   │  │  │  │ fetchData()                   │  │  │
+│  │  │ startMonitoring()     │  │  │  │ transformData()               │  │  │
+│  │  │ saveToDatabase()      │  │  │  │ saveToDatabase()              │  │  │
+│  │  │ handleReconnect()     │  │  │  │ handleReconnect()             │  │  │
+│  │  │ checkNetworkConnectivity│ │  │  └───────────────────────────────┘  │  │
+│  │  └───────────────────────┘  │  │  For: Chiang Mai (HTTP API)         │  │
+│  │  For: WebSocket stations    │  └─────────────────────────────────────┘  │
+│  └─────────────────────────────┘                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DatabaseService.js                                  │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │                          Prisma Client                                 │ │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐   │ │
+│  │  │ Station CRUD    │  │ PowerReading    │  │ MonitoredObjects    │   │ │
+│  │  │ - findOrCreate  │  │ - create        │  │ - getByStation      │   │ │
+│  │  │ - getAll        │  │ - getLatest     │  │ - updateMapping     │   │ │
+│  │  │ - update        │  │ - aggregate     │  │                     │   │ │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────────┘   │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+FRONTEND COMPONENTS (Next.js)
+═════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    frontend/meter-reading-dashboard                         │
+│                                                                             │
+│  PAGES                                                                      │
+│  ┌─────────────────┐  ┌─────────────────────┐  ┌─────────────────────────┐ │
+│  │   / (Dashboard) │  │ /station/[id]       │  │ /settings               │ │
+│  │   - Overview    │  │ - Station Detail    │  │ - Interval Config       │ │
+│  │   - All Stats   │  │ - Historical Chart  │  │ - Clear Readings        │ │
+│  └─────────────────┘  └─────────────────────┘  └─────────────────────────┘ │
+│                                                                             │
+│  COMPONENTS                                                                 │
+│  ┌─────────────────┐  ┌─────────────────────┐  ┌─────────────────────────┐ │
+│  │  stats-cards    │  │ power-readings-table│  │ historical-bar-chart    │ │
+│  │  - Total Active │  │ - Station list      │  │ - Daily/Weekly/Monthly  │ │
+│  │  - Total MUX    │  │ - Power values      │  │ - Power trends          │ │
+│  │  - Sensor count │  │ - Status indicators │  │ - Time-based analysis   │ │
+│  └─────────────────┘  └─────────────────────┘  └─────────────────────────┘ │
+│  ┌─────────────────┐  ┌─────────────────────┐  ┌─────────────────────────┐ │
+│  │  app-sidebar    │  │ power-summary-cards │  │ station-detail-page     │ │
+│  │  - Navigation   │  │ - Per-station stats │  │ - Analytics             │ │
+│  │  - Settings link│  │ - Real-time values  │  │ - MIN/MAX/AVG           │ │
+│  └─────────────────┘  └─────────────────────┘  └─────────────────────────┘ │
+│                                                                             │
+│  API ROUTES                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ /api/station/[id]              - Station details & latest reading   │   │
+│  │ /api/station/[id]/historical   - Historical power data              │   │
+│  │ /api/station/[id]/realtime     - Real-time readings                 │   │
+│  │ /api/station/[id]/active-power-analytics - Active Power stats       │   │
+│  │ /api/station/[id]/mux-analytics          - MUX Power stats          │   │
+│  │ /api/settings                  - Read/Write monitor settings        │   │
+│  │ /api/settings/clear-readings   - Clear PowerReading table           │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Database Schema Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DATABASE SCHEMA (SQLite)                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────┐
+│           Station               │
+├─────────────────────────────────┤
+│ id          Int      PK         │
+│ name        String   UNIQUE     │
+│ ipAddress   String              │
+│ scene       String?             │
+│ createdAt   DateTime            │
+│ updatedAt   DateTime            │
+├─────────────────────────────────┤
+│ ◄─── PowerReading (1:N)         │
+│ ◄─── StationMonitoredObject(1:N)│
+└─────────────────────────────────┘
+              │
+              │ 1:N
+              ▼
+┌─────────────────────────────────┐       ┌─────────────────────────────────┐
+│        PowerReading             │       │   StationMonitoredObject        │
+├─────────────────────────────────┤       ├─────────────────────────────────┤
+│ id               Int      PK    │       │ id            Int      PK       │
+│ stationId        Int      FK    │       │ stationId     Int      FK       │
+│ timestamp        DateTime       │       │ objectType    String            │
+│ activePower1     Float?         │       │ objectId      Int               │
+│ activePower2     Float?         │       │ label         String?           │
+│ activePower3     Float?         │       │ createdAt     DateTime          │
+│ activePower4     Float?         │       │ updatedAt     DateTime          │
+│ activePower5     Float?         │       └─────────────────────────────────┘
+│ activePower6     Float?         │
+│ muxPower1        Float?         │       ┌─────────────────────────────────┐
+│ muxPower2        Float?         │       │            User                 │
+│ muxPower3        Float?         │       ├─────────────────────────────────┤
+│ muxPower4        Float?         │       │ id            Int      PK       │
+│ muxPower5        Float?         │       │ username      String   UNIQUE   │
+│ muxPower6        Float?         │       │ email         String   UNIQUE   │
+│ totalActivePower Float?         │       │ password      String            │
+│ totalMuxPower    Float?         │       │ role          String            │
+│ createdAt        DateTime       │       │ createdAt     DateTime          │
+└─────────────────────────────────┘       │ updatedAt     DateTime          │
+                                          └─────────────────────────────────┘
+```
+
+### Settings & Configuration Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    SETTINGS CONFIGURATION FLOW                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         FRONTEND SETTINGS PAGE                              │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  ┌─────────────────────┐  ┌─────────────────────┐                     │ │
+│  │  │ DB Save Interval    │  │ Update Rate         │                     │ │
+│  │  │ [    30    ] sec    │  │ [    3     ] sec    │                     │ │
+│  │  └─────────────────────┘  └─────────────────────┘                     │ │
+│  │  ┌─────────────────────┐  ┌─────────────────────┐                     │ │
+│  │  │ Connection Timeout  │  │ Reconnect Interval  │                     │ │
+│  │  │ [    10    ] sec    │  │ [    5     ] sec    │                     │ │
+│  │  └─────────────────────┘  └─────────────────────┘                     │ │
+│  │  ┌─────────────────────┐                                              │ │
+│  │  │ Max Reconnect       │  ┌──────────────────────────────────────┐   │ │
+│  │  │ [    10    ] times  │  │  [Save Settings]  [Clear Readings]   │   │ │
+│  │  └─────────────────────┘  └──────────────────────────────────────┘   │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ POST /api/settings
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         monitor-settings.json                               │
+│  {                                                                          │
+│    "dbSaveInterval": 30000,      // ms - How often to save to database     │
+│    "updateRate": 3000,           // ms - WebSocket data request frequency  │
+│    "connectionTimeout": 10000,   // ms - WebSocket connection timeout      │
+│    "reconnectInterval": 5000,    // ms - Delay between reconnect attempts  │
+│    "maxReconnectAttempts": 10    // count - Max reconnection attempts      │
+│  }                                                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ Read on startup
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            monitor.js                                       │
+│  loadSettingsFromFile() ──▶ config = { ...defaults, ...customSettings }    │
+│                                                                             │
+│  ⚠️  IMPORTANT: Restart monitor.js for settings to take effect!            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+
+### Network Reconnection Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      NETWORK RECONNECTION FLOW                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                    ┌─────────────────────┐
+                    │   Connection Lost   │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │ reconnectAttempts++ │
+                    │ networkFailureCount++│
+                    └──────────┬──────────┘
+                               │
+                               ▼
+              ┌────────────────────────────────┐
+              │ attempts < maxReconnectAttempts│
+              │         (default: 10)          │
+              └────────────────┬───────────────┘
+                    ┌──────────┴──────────┐
+                    │                     │
+                   YES                    NO
+                    │                     │
+                    ▼                     ▼
+    ┌───────────────────────────┐  ┌─────────────────────────┐
+    │ Calculate Backoff Delay   │  │ Wait 2 minutes          │
+    │ delay = min(              │  │ Reset reconnectAttempts │
+    │   reconnectInterval *     │  │ Try again               │
+    │   1.5^(attempts-1),       │  └─────────────────────────┘
+    │   60000                   │
+    │ )                         │
+    └───────────────┬───────────┘
+                    │
+                    ▼
+    ┌───────────────────────────┐
+    │ Check Network Connectivity│
+    │ (TCP connect to port 80)  │
+    └───────────────┬───────────┘
+                    │
+         ┌─────────┴─────────┐
+         │                   │
+    Available           Unavailable
+         │                   │
+         ▼                   ▼
+    ┌─────────────┐    ┌─────────────┐
+    │ Reconnect   │    │ Wait & Retry│
+    │ WebSocket   │    │ (increment  │
+    └──────┬──────┘    │  attempts)  │
+           │           └─────────────┘
+    ┌──────┴──────┐
+    │             │
+  Success       Fail
+    │             │
+    ▼             ▼
+┌─────────┐  ┌─────────────┐
+│ Reset   │  │ Continue    │
+│ counters│  │ retry loop  │
+│ Resume  │  └─────────────┘
+│ monitor │
+└─────────┘
+```
+
+---
 
 ## System Architecture
 
@@ -25,6 +445,7 @@ The system consists of two main components:
   - MUX Power Meters 1-6 (Objects: 18069-18070, 73909-73910, 75428-75429)
 - **Auto-reconnection**: Handles connection failures with exponential backoff
 - **Data Persistence**: Stores readings in SQLite database via Prisma ORM
+- **Configurable Settings**: Adjustable intervals via Settings page
 - **Logging**: Comprehensive logging system with rotation
 
 ### Frontend Dashboard
@@ -33,6 +454,7 @@ The system consists of two main components:
 - **Power Summary Cards**: Total Active Power, MUX Power, and sensor counts
 - **Historical Analysis**: Configurable time periods (Day, Week, Month, Year)
 - **Power Breakdowns**: Individual channel analysis with MIN/MAX/AVG statistics
+- **Settings Page**: Configure monitor intervals and clear database
 - **Real-time Updates**: Auto-refreshing data with WebSocket integration
 
 ## Project Structure
@@ -41,16 +463,25 @@ The system consists of two main components:
 ge-automate-meter-node/
 ├── src/                          # Backend source code
 │   ├── api/                      # API data fetchers
+│   │   └── ApiDataFetcher.js     # HTTP API for Chiang Mai station
 │   ├── database/                 # Database services
+│   │   └── DatabaseService.js    # Prisma ORM wrapper
 │   ├── utils/                    # Utility scripts
 │   └── websocket/                # WebSocket handlers
 ├── frontend/                     # Frontend Next.js application
 │   └── meter-reading-dashboard/  # Dashboard application
+│       ├── app/                  # Next.js app router
+│       │   ├── api/              # API routes
+│       │   ├── station/[id]/     # Station detail page
+│       │   └── settings/         # Settings page
+│       ├── components/           # React components
+│       └── lib/                  # Utilities and types
 ├── prisma/                       # Database schema and migrations
+│   └── schema.prisma             # Prisma schema definition
 ├── logs/                         # Application logs
-├── scripts/                      # Utility scripts
 ├── monitor.js                    # Main monitoring application
 ├── chaigmai.js                   # Chiang Mai specific monitoring
+├── monitor-settings.json         # Runtime settings (created by Settings page)
 └── *.csv                         # Data import/export files
 ```
 
@@ -140,17 +571,19 @@ The system monitors 12 objects per station:
 | 75428-75429 | MUX Power | MUX meters 5-6 |
 
 ### System Settings
-Edit `monitor.js` configuration:
 
-```javascript
-const config = {
-  updateRate: 3000,           // Data collection interval (ms)
-  connectionTimeout: 10000,   // WebSocket timeout (ms)
-  reconnectInterval: 5000,    // Reconnection delay (ms)
-  maxReconnectAttempts: 5,    // Max reconnection attempts
-  cycleDelay: 60000,         // Delay between station cycles (ms)
-};
-```
+Settings can be configured via the **Settings page** in the dashboard or by editing `monitor-settings.json`:
+
+| Parameter | Description | Default | Unit |
+|-----------|-------------|---------|------|
+| `dbSaveInterval` | How often to save data to database | 30000 | ms |
+| `updateRate` | WebSocket data request frequency | 3000 | ms |
+| `connectionTimeout` | WebSocket connection timeout | 10000 | ms |
+| `reconnectInterval` | Delay between reconnection attempts | 5000 | ms |
+| `maxReconnectAttempts` | Maximum reconnection attempts | 10 | count |
+
+**Note:** Restart `monitor.js` after changing settings for them to take effect.
+
 
 ## Database Schema
 
@@ -164,6 +597,7 @@ const config = {
 - Timestamp-based power measurements
 - 6 Active Power channels (activePower1-6)
 - 6 MUX Power channels (muxPower1-6)
+- Total power calculations (totalActivePower, totalMuxPower)
 
 **StationMonitoredObject**
 - Maps object types to specific IDs per station
@@ -232,6 +666,8 @@ The frontend provides REST APIs for data access:
 | `/api/station/[id]/realtime` | GET | Real-time readings |
 | `/api/station/[id]/active-power-analytics` | GET | Active Power analytics |
 | `/api/station/[id]/mux-analytics` | GET | MUX Power analytics |
+| `/api/settings` | GET/POST | Read/Write monitor settings |
+| `/api/settings/clear-readings` | POST | Clear PowerReading table |
 
 ## Deployment
 
@@ -347,6 +783,11 @@ pm2 start frontend/meter-reading-dashboard/package.json --name "dashboard"
    - Verify monitored object IDs are correct
    - Check station-specific object mappings
    - Review data collection logs
+
+4. **Settings Not Applying**
+   - Ensure `monitor-settings.json` exists
+   - Verify JSON format is valid
+   - Restart `monitor.js` after changes
 
 ### Debug Mode
 Enable debug logging by setting environment variable:

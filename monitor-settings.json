@@ -1,0 +1,7 @@
+{
+  "dbSaveInterval": 60000,
+  "updateRate": 3000,
+  "connectionTimeout": 10000,
+  "reconnectInterval": 5000,
+  "maxReconnectAttempts": 10
+}

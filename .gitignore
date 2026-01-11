@@ -20,6 +20,22 @@ node_modules/
 /generated/prisma
 /frontend/meter-reading-dashboard
 
+# planing
+CHIANG_MAI_INTEGRATION.md
+DYNAMIC_MONITORED_OBJECTS.md
+DYNAMIC_OBJECTS_COMPLETE.md
+EMAIL_FAILURE_ANALYSIS.md
+EMAIL_TROUBLESHOOTING_GUIDE.md
+IMPLEMENTATION_SUMMARY.md
+RANONG_DATA_MAPPING_FIX.md
+REAL_TIME_DATA_IMPLEMENTATION.node_modules.md
+IMPLEMENTATION_SUMMARY_EMAIL.md
+REAL_TIME_DATA_IMPLEMENTATION.md
+
+# pdpa
+users.csv
+stations.csv
+
 # Log files
 *.log
 logs/

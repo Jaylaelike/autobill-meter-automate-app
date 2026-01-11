@@ -650,6 +650,32 @@ class DatabaseService {
       }
     });
 
+    // Calculate and store total power values
+    // Handle pre-calculated totals from monitor.js
+    if (powerData.hasOwnProperty('totalActivePower')) {
+      dbData.totalActivePower = parseFloat(powerData.totalActivePower) || null;
+    } else {
+      // Calculate from individual values
+      const activePowerSum = ['activePower1', 'activePower2', 'activePower3', 'activePower4', 'activePower5', 'activePower6']
+        .reduce((sum, field) => {
+          const val = dbData[field];
+          return sum + (val !== null && val !== undefined ? val : 0);
+        }, 0);
+      dbData.totalActivePower = activePowerSum > 0 ? activePowerSum : null;
+    }
+
+    if (powerData.hasOwnProperty('totalMuxPower')) {
+      dbData.totalMuxPower = parseFloat(powerData.totalMuxPower) || null;
+    } else {
+      // Calculate from individual values
+      const muxPowerSum = ['muxPower1', 'muxPower2', 'muxPower3', 'muxPower4', 'muxPower5', 'muxPower6']
+        .reduce((sum, field) => {
+          const val = dbData[field];
+          return sum + (val !== null && val !== undefined ? val : 0);
+        }, 0);
+      dbData.totalMuxPower = muxPowerSum > 0 ? muxPowerSum : null;
+    }
+
     return dbData;
   }
 

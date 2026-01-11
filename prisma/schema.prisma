@@ -69,6 +69,10 @@ model PowerReading {
   muxPower5     Float?  // Additional MUX
   muxPower6     Float?  // Additional MUX
   
+  // Total Power columns (computed sums)
+  totalActivePower  Float?  // Sum of activePower1-6 (Watts)
+  totalMuxPower     Float?  // Sum of muxPower1-6 (kWh)
+  
   createdAt   DateTime @default(now())
   
   // Relationships
