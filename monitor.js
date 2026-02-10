@@ -409,20 +409,20 @@ class StationMonitor {
 
   // Setup object labels for display
   setupObjectLabels(objectMap = null) {
-    // Default labels
+    // Default labels (use string keys for consistency)
     const defaultLabels = {
-      8684: "Active Power 1",
-      8685: "Active Power 2",
-      8686: "Active Power 3",
-      8687: "Active Power 4",
-      8688: "Active Power 5",
-      8689: "Active Power 6",
-      18069: "MUX#1 TV5 Power Meter",
-      18070: "MUX#2 MCOT Power Meter",
-      73909: "MUX#3 PRD Power Meter",
-      73910: "MUX#4 TPBS Power Meter",
-      75428: "MUX#5 Power Meter",
-      75429: "MUX#6 Power Meter",
+      '8684': "Active Power 1",
+      '8685': "Active Power 2",
+      '8686': "Active Power 3",
+      '8687': "Active Power 4",
+      '8688': "Active Power 5",
+      '8689': "Active Power 6",
+      '18069': "MUX#1 TV5 Power Meter",
+      '18070': "MUX#2 MCOT Power Meter",
+      '73909': "MUX#3 PRD Power Meter",
+      '73910': "MUX#4 TPBS Power Meter",
+      '75428': "MUX#5 Power Meter",
+      '75429': "MUX#6 Power Meter",
     };
 
     // If we have object mapping from database, create more specific labels
@@ -445,7 +445,8 @@ class StationMonitor {
           muxPower6: "MUX#6 Power Meter",
         };
 
-        this.objectLabels[objectId] =
+        // Use string key for consistency
+        this.objectLabels[objectId.toString()] =
           typeLabels[objectType] || `${objectType} (ID ${objectId})`;
       });
     } else {
@@ -457,24 +458,30 @@ class StationMonitor {
   updateData(syncData) {
     this.lastUpdate = new Date();
     let hasChanges = false;
+    let hasData = false;
 
     this.monitoredObjects.forEach((id) => {
-      if (syncData.hasOwnProperty(id.toString())) {
-        const newValue = syncData[id.toString()];
-        if (this.dataBuffer[id] !== newValue) {
-          this.dataBuffer[id] = newValue;
+      const idStr = id.toString();
+      if (syncData.hasOwnProperty(idStr)) {
+        const newValue = syncData[idStr];
+        hasData = true; // We received data for this object
+        // Store with string key for consistency
+        if (this.dataBuffer[idStr] !== newValue) {
+          this.dataBuffer[idStr] = newValue;
           hasChanges = true;
         }
       }
     });
 
+    // Display data only when values change
     if (hasChanges) {
       this.displayData();
+    }
 
-      // Save to database if enabled
-      if (this.databaseService && this.stationRecord) {
-        this.saveToDatabase();
-      }
+    // Save to database if we have data (regardless of changes)
+    // The saveToDatabase method handles the time interval check
+    if (hasData && this.databaseService && this.stationRecord) {
+      this.saveToDatabase();
     }
   }
 
@@ -699,6 +706,7 @@ class MonitorController {
     this.databaseService = null;
     this.databaseEnabled = true; // Can be configured via environment variable
     this.chiangMaiProcess = null; // Process for chaigmai.js
+    this.buengkanProcess = null; // Process for buengkan.js
   }
 
   // Load station configurations from database
@@ -938,6 +946,9 @@ class MonitorController {
     // Start Chiang Mai station (chaigmai.js)
     await this.startChiangMaiStation();
 
+    // Start Bueng Kan station (buengkan.js)
+    await this.startBuengkanStation();
+
     const promises = this.monitors.map(async (monitor) => {
       try {
         if (monitor instanceof ApiDataFetcher) {
@@ -1038,6 +1049,65 @@ class MonitorController {
     }
   }
 
+  // Start Bueng Kan station process
+  async startBuengkanStation() {
+    try {
+      console.log("🏢 เริ่มต้นสถานีบึงกาฬ...");
+
+      // Ensure station exists in database
+      if (this.databaseService) {
+        const buengkanConfig = {
+          name: "บึงกาฬ",
+          ip: "ws://10.9.5.5/ws",
+          scene: "d0cf3a77-e9dd-4419-bec0-b54ecad3e541",
+        };
+
+        await this.databaseService.findOrCreateStation(buengkanConfig);
+        console.log("💾 สถานีบึงกาฬพร้อมในฐานข้อมูล");
+      }
+
+      // Start buengkan.js process
+      this.buengkanProcess = spawn("node", ["buengkan.js"], {
+        stdio: ["pipe", "pipe", "pipe"],
+        cwd: process.cwd(),
+      });
+
+      // Handle process output
+      this.buengkanProcess.stdout.on("data", (data) => {
+        const output = data.toString().trim();
+        if (output) {
+          console.log(`[บึงกาฬ] ${output}`);
+        }
+      });
+
+      this.buengkanProcess.stderr.on("data", (data) => {
+        const error = data.toString().trim();
+        if (error) {
+          console.error(`[บึงกาฬ] ERROR: ${error}`);
+        }
+      });
+
+      this.buengkanProcess.on("close", (code) => {
+        console.log(`[บึงกาฬ] Process exited with code ${code}`);
+        if (this.isRunning && code !== 0) {
+          // Restart if it crashed and we're still running
+          setTimeout(() => {
+            console.log("[บึงกาฬ] Restarting...");
+            this.startBuengkanStation();
+          }, 5000);
+        }
+      });
+
+      this.buengkanProcess.on("error", (error) => {
+        console.error(`[บึงกาฬ] Failed to start process:`, error.message);
+      });
+
+      console.log("✓ สถานีบึงกาฬเริ่มทำงานแล้ว");
+    } catch (error) {
+      console.error("❌ ไม่สามารถเริ่มสถานีบึงกาฬ:", error.message);
+    }
+  }
+
   // Sleep utility
   sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1052,6 +1122,13 @@ class MonitorController {
       console.log("⏹️  หยุดสถานีเชียงใหม่...");
       this.chiangMaiProcess.kill("SIGTERM");
       this.chiangMaiProcess = null;
+    }
+
+    // Stop Bueng Kan process
+    if (this.buengkanProcess) {
+      console.log("⏹️  หยุดสถานีบึงกาฬ...");
+      this.buengkanProcess.kill("SIGTERM");
+      this.buengkanProcess = null;
     }
 
     this.monitors.forEach((monitor) => {

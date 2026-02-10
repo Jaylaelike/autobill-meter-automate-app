@@ -609,6 +609,7 @@ class DatabaseService {
       75483: "muxPower5", // ภูเก็ต MUX#5 (alternative ID)
       75484: "muxPower6", // ภูเก็ต MUX#6 (alternative ID)
       75519: "muxPower6", // สิงห์บุรี MUX#6 (alternative ID)
+      75426: "muxPower5", // บึงกาฬ MUX#5 (alternative ID)
     };
 
     // Transform Active Power readings

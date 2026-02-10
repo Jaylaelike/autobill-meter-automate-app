@@ -26,12 +26,12 @@
         <div>MUX#3 PRD Power Meter totally: <span id="chiangmai-73909"></span></div>
         <div>MUX#4 TPBS Power Meter totally: <span id="chiangmai-73910"></span></div>
         <div>MUX#5 TPBS Power Meter totally: <span id="chiangmai-224272"></span></div>
-        <div>MUX#6 TPBS Power Meter totally: <span id="chiangmai-75429"></span></div>
+        <div>MUX#6 TPBS Power Meter totally: <span id="chiangmai-75426"></span></div>
     </div>
 
     <script>
         let ws = null;
-        const IP = "ws://10.3.2.5/ws"; // เชียงใหม่
+        const IP = "ws://10.9.5.5/ws"; // เชียงใหม่
 
         window.USID = null; // Global variable to store USID
 
@@ -120,7 +120,7 @@
                     method: "ScriptEngine.registerActiveObjects",
                     params: [
                         "",
-                        [8684, 8685, 8687, 8688, 18069, 18070, 73910, 224272, -1]
+                        [8684, 8685, 8687, 8688, 18069, 18070, 73910, 75426, -1]
                     ]
                 };
 
@@ -261,7 +261,7 @@
                             const syncData = msg.notification.value?.sync;
                             if (syncData) {
                                 const ids = [
-                                    8684, 8685, 8687, 8688, 18069, 18070, 73910, 224272 , -1
+                                    8684, 8685, 8687, 8688, 18069, 18070, 73910, 75426 , -1
                                 ];
 
                                 ids.forEach(id => {
